@@ -23,7 +23,7 @@ NE_LAT = center_lat + 0.01
 NE_LNG = center_lng + 0.01
 
 N_GRID = 5
-GMAPS_JS_API_KEY = "AIzaSyCo2ze0qBuX44bMra3t0B5ZZf0Fe-GVcZE"  # <-- REQUIRED
+GMAPS_JS_API_KEY = "KEY"  # <-- REQUIRED
 TICK_SECONDS = 1.5  # how often the page will request a step
 # ====================
 
