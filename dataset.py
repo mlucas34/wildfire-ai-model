@@ -12,7 +12,7 @@ class WildFireDataset(Dataset):
         
     def collect_data(self):
         for _ in range(self.num_episodes):
-            obs, state, _ = self.env.reset()   # or env.step(random) if you prefer variety
+            obs, state, _ = self.env.reset()
             cur_obs = self.env.get_agent_obs(self.agent_idx)
 
             state = np.array(state.flatten(), dtype=np.long)
@@ -39,5 +39,6 @@ class WildFireDataset(Dataset):
     def __getitem__(self, idx):
         src, trg = self.samples[idx]
         return torch.tensor(src, dtype=torch.float32), torch.tensor(trg.flatten(), dtype=torch.long)
+
 
 
