@@ -28,20 +28,17 @@ def train(model, data_loader, optimizer, loss_function, clip, teacher_forcing_ra
         total_loss = 0
         for batch_idx, (src, trg) in enumerate(data_loader):
             src = src.to(device)  # (seq_len, batch, feat)
-            # Targets are continuous observation vectors — keep them float.
-            trg = trg.to(device)                   # (batch, seq_len, feat)
+            trg = trg.to(device)  # (batch, seq_len, feat)
 
             optimizer.zero_grad()
 
-            # Model returns (batch, seq_len, feat)
+            # model returns (batch, seq_len, feat)
             outputs = model(src, trg, teacher_forcing_ratio)
             outputs = torch.log_softmax(outputs, dim=-1)
 
-            # Defensive dtype cast: ensure both tensors are float32 for regression loss
             if outputs.dtype != torch.float32:
                 outputs = outputs.float()
 
-            # Compute regression loss over predicted features (skip t=0 which is usually the input)
             loss = loss_function(outputs.transpose(1, 2), trg)
             loss.backward()
 
@@ -50,21 +47,19 @@ def train(model, data_loader, optimizer, loss_function, clip, teacher_forcing_ra
 
             if batch_idx == 0 and (epoch + 1) % 5 == 0:
                 with torch.no_grad():
-                    # Convert log-probabilities to probabilities
-                    probs = torch.exp(outputs)
+                    probs = torch.exp(outputs) # convert to probabilities
 
-                    # Predicted class per cell (argmax over last dimension)
                     predicted_state = torch.argmax(probs, dim=-1)  # (batch, seq_len)
                     actual_state = trg.argmax(dim=-1) if trg.ndim == 3 else trg
 
-                    print(f"\nEpoch {epoch+1}, Batch {batch_idx+1}")
+                    print(f"\nEpoch {epoch + 1}, Batch {batch_idx+1}")
                     print("Predicted state (first sample):")
                     print(predicted_state[:5].cpu().numpy())
                     print("Actual state (first sample):")
                     print(actual_state[:5].cpu().numpy())
                     print()
 
-        print(f"Epoch {epoch+1}/{num_epochs}, Loss: {total_loss / len(data_loader):.6f}")
+        print(f"Epoch {epoch + 1}/{num_epochs}, Loss: {total_loss / len(data_loader):.6f}")
 
         if (epoch + 1) % 5 == 0 or (epoch + 1) == num_epochs:
             torch.save({
@@ -118,10 +113,11 @@ if __name__ == '__main__':
     print("starting training")
     train(model, train_loader, optimizer, loss_function, None, 0.5, device)
     
-    # Save model after training
+    # save progress
     torch.save({
         'epoch': num_epochs,
         'model_state_dict': model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),
     }, model_path)
     print(f"model saved to {model_path}")
+
