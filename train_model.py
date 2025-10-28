@@ -70,7 +70,6 @@ def train(model, data_loader, optimizer, loss_function, clip, teacher_forcing_ra
             }, model_path)
 
 
-
 if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(device)
@@ -86,6 +85,9 @@ if __name__ == '__main__':
 
     model_path = "best_model.pth"
     samples_json_path = "samples.json"
+
+    with open('samples_json_path', 'w') as file:
+        json.dump({}, file)
 
     if os.path.exists(model_path):
         print(f"loading model from {model_path}...")
@@ -113,11 +115,10 @@ if __name__ == '__main__':
     print("starting training")
     train(model, train_loader, optimizer, loss_function, None, 0.5, device)
     
-    # save progress
+    # Save model after training
     torch.save({
         'epoch': num_epochs,
         'model_state_dict': model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),
     }, model_path)
     print(f"model saved to {model_path}")
-
