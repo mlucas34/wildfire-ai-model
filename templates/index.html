@@ -1,0 +1,203 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>Live Gridworld on Google Maps</title>
+
+    <style>
+      html, body, #map { height: 100%; margin:0; padding:0; }
+      .hud {
+        position:absolute; z-index:999; background:#ffffffcc; padding:8px 12px; border-radius:8px;
+        left:12px; top:90px; font-family:sans-serif; font-size:14px;
+      }
+      .controls {
+        position:absolute; z-index:999; right:12px; top:12px; background:#ffffffcc; padding:8px 12px; border-radius:8px;
+        font-family:sans-serif; font-size:14px;
+      }
+      select { padding:4px; }
+    </style>
+
+    <script>
+      let map;
+      let gridLines = [];
+      let agentMarkers = [];
+      let fireMarkers = [];
+      let victimMarkers = [];
+      let mapType = 'hybrid';
+
+      async function fetchState() {
+        const res = await fetch('/state');
+        return await res.json();
+      }
+
+      async function tick() {
+        await fetch('/tick', {method: 'POST'});
+        const state = await fetchState();
+        updateHUD(state);
+        ensureGrid(state);
+        updateMarkers(state);
+      }
+
+      function ensureGrid(state) {
+        if (!map.__grid_init) {
+          drawGrid(map, state.bbox, state.n_grid);
+          map.__grid_init = true;
+        }
+      }
+
+      function drawGrid(map, bbox, n) {
+        const sw = bbox.sw, ne = bbox.ne;
+        for (const l of gridLines) l.setMap(null);
+        gridLines = [];
+        // horizontal lines
+        for (let r=0; r<=n; r++) {
+          const lat = ne.lat + (r/n)*(sw.lat - ne.lat);
+          const path = [{lat: lat, lng: sw.lng}, {lat: lat, lng: ne.lng}];
+          gridLines.push(new google.maps.Polyline({ path, map, strokeOpacity: 0.1, strokeWeight: 1 }));
+        }
+        // vertical lines
+        for (let c=0; c<=n; c++) {
+          const lng = sw.lng + (c/n)*(ne.lng - sw.lng);
+          const path = [{lat: ne.lat, lng}, {lat: sw.lat, lng}];
+          gridLines.push(new google.maps.Polyline({ path, map, strokeOpacity: 0.1, strokeWeight: 1 }));
+        }
+      }
+
+      function clearMarkers(arr) {
+        for (const m of arr) m.setMap(null);
+        arr.length = 0;
+      }
+
+      function updateMarkers(state) {
+        clearMarkers(agentMarkers);
+        clearMarkers(fireMarkers);
+        clearMarkers(victimMarkers);
+
+        // Agents
+        for (const a of state.agents) {
+          const iconUrl = (a.label === 'H') ? '/icons/FF.png' : '/icons/medic.png';
+          const m = new google.maps.Marker({
+            position: {lat: a.lat, lng: a.lng},
+            map,
+            icon: {
+              url: iconUrl,
+              scaledSize: new google.maps.Size(60, 60),
+              anchor: new google.maps.Point(30, 30)
+            },
+            title: (a.label === 'H') ? 'Firefighter Helicopter' : 'Medical Drone'
+          });
+          agentMarkers.push(m);
+        }
+
+        // Fires
+        for (const f of state.fires) {
+          const m = new google.maps.Marker({
+            position: {lat: f.lat, lng: f.lng},
+            map,
+            icon: {
+              url: '/icons/fire.png',
+              scaledSize: new google.maps.Size(50, 50),
+              anchor: new google.maps.Point(25, 25)
+            },
+            title: 'Fire'
+          });
+          fireMarkers.push(m);
+        }
+
+        // Victims
+        for (const v of state.victims) {
+          const m = new google.maps.Marker({
+            position: {lat: v.lat, lng: v.lng},
+            map,
+            icon: {
+              url: '/icons/victim.png',
+              scaledSize: new google.maps.Size(30, 30),
+              anchor: new google.maps.Point(15, 15)
+            },
+            title: 'Victim'
+          });
+          victimMarkers.push(m);
+        }
+      }
+
+      function updateHUD(state) {
+        const stats = state.stats || {fires_extinguished:0, victims_saved:0};
+        const el = document.getElementById('hud');
+        el.innerHTML = `
+          <div><b>WildFire GridWorld</b></div>
+          <div>Grid: ${state.n_grid}×${state.n_grid}</div>
+          <div>Fires extinguished: ${stats.fires_extinguished}</div>
+          <div>Victims saved: ${stats.victims_saved}</div>
+          <hr style="margin:6px 0;">
+          <div style="display:flex; flex-direction:column; gap:4px; font-size:13px;">
+            <div style="display:flex; align-items:center;">
+              <img src="/icons/FF.png" style="width:20px; height:20px; margin-right:6px;"> Firefighter Helicopter
+            </div>
+            <div style="display:flex; align-items:center;">
+              <img src="/icons/medic.png" style="width:20px; height:20px; margin-right:6px;"> Medical Drone
+            </div>
+            <div style="display:flex; align-items:center;">
+              <img src="/icons/fire.png" style="width:18px; height:18px; margin-right:6px;"> Fire
+            </div>
+            <div style="display:flex; align-items:center;">
+              <img src="/icons/victim.png" style="width:18px; height:18px; margin-right:6px;"> Victim
+            </div>
+          </div>
+        `;
+      }
+
+      function onMapTypeChange(sel) {
+        mapType = sel.value;
+        map.setMapTypeId(mapType);
+      }
+
+      async function initMap() {
+        const state = await fetchState();
+
+        // Auto-fit to bbox for perfect initial zoom
+        const bounds = new google.maps.LatLngBounds(
+          {lat: state.bbox.sw.lat, lng: state.bbox.sw.lng},
+          {lat: state.bbox.ne.lat, lng: state.bbox.ne.lng}
+        );
+        map = new google.maps.Map(document.getElementById('map'), {
+          center: state.center,
+          mapTypeId: mapType,
+          streetViewControl: false,
+          fullscreenControl: false
+        });
+        map.fitBounds(bounds);
+
+        updateHUD(state);
+        ensureGrid(state);
+        updateMarkers(state);
+
+        // FIRST MOVE after 10 seconds, then every 1 second
+        setTimeout(async () => {
+          await tick();
+          setInterval(tick, {{ tick_ms }});
+        }, 10000);
+      }
+
+      // Log JS errors to make debugging easy
+      window.addEventListener('error', e => console.error('JS Error:', e.message));
+    </script>
+
+    <script async defer
+      src="https://maps.googleapis.com/maps/api/js?key={{ key }}&callback=initMap&v=weekly">
+    </script>
+  </head>
+
+  <body>
+    <div id="map"></div>
+    <div id="hud" class="hud">Loading…</div>
+    <div class="controls">
+      <div><b>Map Type</b></div>
+      <select onchange="onMapTypeChange(this)">
+        <option value="hybrid" selected>Hybrid (Satellite + Labels)</option>
+        <option value="satellite">Satellite</option>
+        <option value="terrain">Terrain</option>
+        <option value="roadmap">Roadmap</option>
+      </select>
+    </div>
+  </body>
+</html>
