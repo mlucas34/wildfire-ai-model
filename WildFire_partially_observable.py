@@ -88,9 +88,9 @@ class WildFireEnv(gym.Env):
 
         unit = self.get_unit_by_id(agent_id)
 
-        agent_feats = np.zeros((len(self.FF) + len(self.med), 5), dtype = np.long)
-        object_feats = np.zeros((len(self.original_fire) + len(self.original_victims), 5), dtype = np.long)
-        own_feats = np.zeros(3, dtype = np.long)
+        agent_feats = np.zeros((len(self.FF) + len(self.med), 5), dtype = np.int64)
+        object_feats = np.zeros((len(self.original_fire) + len(self.original_victims), 5), dtype = np.int64)
+        own_feats = np.zeros(3, dtype = np.int64)
 
         x = unit.x
         y = unit.y
