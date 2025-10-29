@@ -239,7 +239,7 @@ SW_LAT, SW_LNG = CENTER_LAT - DELTA, CENTER_LNG - DELTA
 NE_LAT, NE_LNG = CENTER_LAT + DELTA, CENTER_LNG + DELTA
 
 N_GRID = 5
-GMAPS_JS_API_KEY = "AIzaSyCo2ze0qBuX44bMra3t0B5ZZf0Fe-GVcZE"
+GMAPS_JS_API_KEY = "key"
 TICK_SECONDS = 1.0
 
 Agent = namedtuple("Agent", ["y", "x", "type_id"])
