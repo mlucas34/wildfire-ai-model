@@ -22,10 +22,10 @@ class WildFireEnv(gym.Env):
         self.original_med = self.med
         self.number_of_FF = len(self.FF)
         self.number_of_med = len(self.med)
-        self.FF_id = 1000
-        self.med_id = 2000
-        self.fire_id = 3000
-        self.victim_id = 4000
+        self.FF_id = 100
+        self.med_id = 200
+        self.fire_id = 300
+        self.victim_id = 400
         self.agents = {}
         self.n_agents = 0
         self.fire = [[0, 1], [1, 2], [2, 1]]
@@ -167,56 +167,47 @@ class WildFireEnv(gym.Env):
         return agent_obs
     
     def get_state(self):
-        grid = np.zeros((self.n_grid, self.n_grid), dtype = np.int8)
-
-        cells = {}
-
-        # Fires
-        for f in self.fire:
-            cells.setdefault(tuple(f), set()).add("f")
-
-        # Victims
-        for v in self.victims:
-            cells.setdefault(tuple(v), set()).add("v")
+        agent_feats = np.zeros((len(self.FF) + len(self.med), 3), dtype = np.long)
+        object_feats = np.zeros((len(self.original_fire) + len(self.original_victims), 3), dtype = np.long)
         
-        for agent in self.agents.values():
-            a_coords = (agent.y, agent.x)
-            type = "FF" if agent.type_id == 1000 else "med"
-            cells.setdefault(a_coords, set()).add(type)
+        i = 0
 
-        for coords, content in cells.items():
-            if content == {'FF'}:
-                grid[coords] = 1
-            elif content == {'med'}:
-                grid[coords] = 2
-            elif content == {'med', 'FF'}:
-                grid[coords] = 3
-            elif content == {'f'}:
-                grid[coords] = 4
-            elif content == {'v'}:
-                grid[coords] = 5
-            elif content == {'FF', 'f'}:
-                grid[coords] = 6
-            elif content == {'FF', 'v'}:
-                grid[coords] = 7
-            elif content == {'v', 'f'}:
-                grid[coords] = 8
-            elif content == {'med', 'f'}:
-                grid[coords] = 9
-            elif content == {'med', 'v'}:
-                grid[coords] = 10
-            elif content == {'med', 'FF', 'v'}:
-                grid[coords] = 11
-            elif content == {'med', 'FF', 'f'}:
-                grid[coords] = 12
-            elif content == {'med', 'f', 'v'}:
-                grid[coords] = 13
-            elif content == {'FF', 'f', 'v'}:
-                grid[coords] = 14
-            elif content == {'FF', 'f', 'v', 'med'}:
-                grid[coords] = 15
+        for f in self.fire:
+            fy, fx = f
+            object_feats[i, 0] = fx
+            object_feats[i, 1] = fy
+            object_feats[i, 2] = self.fire_id
 
-        return grid
+            i += 1
+        
+        for v in self.victims:
+            vy, vx = v
+            object_feats[i, 0] = vx
+            object_feats[i, 1] = vy
+            object_feats[i, 2] = self.victim_id
+
+            i += 1
+        
+        # agent features
+        ids = [id for id in range(self.n_agents)]
+
+        for i, id in enumerate(ids):
+            agent = self.get_unit_by_id(id)
+            ax = agent.x
+            ay = agent.y
+
+            agent_feats[i, 0] = ax
+            agent_feats[i, 1] = ay
+            agent_feats[i, 2] = agent.type_id
+
+        
+        state = np.concatenate((
+            agent_feats.flatten(),
+            object_feats.flatten()
+            )
+        )
+
+        return state
 
     def transition(self, action):
         moves = [(-1, 0), (1, 0), (0, -1), (0, 1), (0, 0)]  # (dy, dx) - Up, Down, Left, Right, Stay

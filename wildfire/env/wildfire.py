@@ -32,6 +32,7 @@ class WildFireEnv(gym.Env):
         self.n_agents = 0
         self.fire = [[0, 1], [1, 2], [2, 1]]
         self.victims = [[0, 0], [1, 2]]
+        self.n_objects = len(self.fire) + len(self.victims)
         self.original_fire = self.fire
         self.original_victims = self.victims
         self.victim_saved = 0
@@ -42,19 +43,14 @@ class WildFireEnv(gym.Env):
         else:
             self.max_step = 30000
 
+        self.init_agents()
+
         self.mode = mode
         self.trunct = False
 
-        self.action_space = spaces.MultiDiscrete([5] * self.n_agents) 
+        self.action_space = spaces.MultiDiscrete([5] * self.n_agents)
 
-        # 16 possible values (0‒15) for each grid cell
-        self.observation_space = spaces.MultiDiscrete(np.full(self.n_grid * self.n_grid, 15, dtype=np.int32))
-
-
-    def update_beliefs(self):
-        return 0
-
-    #def get_ally_feat_dim():
+        
 
     def init_agents(self):
         ally_agents = []
@@ -80,13 +76,39 @@ class WildFireEnv(gym.Env):
     def get_unit_by_id(self, agent_id):
         return self.agents[agent_id]
 
-    def get_agent_obs(self, agent_id = None):
-        if agent_id == None:
-            return 0
+    def get_obs(self):
+        """Returns all agent observations in a list.
+        NOTE: Agents should have access only to their local observations
+        during decentralised execution.
+        """
+        agents_obs = [self.get_obs_agent(i) for i in range(self.n_agents)]
+        return agents_obs
 
-        #ally_feats_dim = self.get_ally_feat_dim()
-        #enemy_feats_dim = self.get_enemy_feat_dim()
-        #own_feats_dim = self.get_own_feats()
+    def get_obs_agent(self, agent_id = None):
+        """Returns observation for agent_id. The observation is composed of:
+
+        - agent features (position in the path and agents id)
+        - enemy features (available_to_see, distance relative_x, relative_y,
+            , unit_type)
+        - objects features (visible, distance, relative_x, relative_y,
+            unit_type)
+
+        All of this information is flattened and concatenated into a list,
+        in the aforementioned order. To know the sizes of each of the
+        features inside the final list of features, take a look at the
+        functions ``get_obs_move_feats_size()``,
+        ``get_obs_enemy_feats_size()``, ``get_obs_ally_feats_size()`` and
+        ``get_obs_own_feats_size()``.
+
+        The size of the observation vector may vary, depending on the
+        environment configuration and type of units present in the map.
+
+        NOTE: Agents should have access only to their local observations
+        during decentralised execution.
+        """
+
+        if agent_id == None:
+            raise(f"Agent ID is not selected")
 
         unit = self.get_unit_by_id(agent_id)
 
@@ -168,7 +190,7 @@ class WildFireEnv(gym.Env):
 
         return agent_obs
     
-    def get_state(self):
+    def get_grid(self):
         grid = np.zeros((self.n_grid, self.n_grid), dtype = np.int8)
 
         cells = {}
@@ -219,6 +241,71 @@ class WildFireEnv(gym.Env):
                 grid[coords] = 15
 
         return grid
+    
+    def get_state(self):
+        agent_feats = np.zeros((len(self.FF) + len(self.med), 3), dtype = np.long)
+        object_feats = np.zeros((len(self.original_fire) + len(self.original_victims), 3), dtype = np.long)
+        
+        i = 0
+
+        for f in self.fire:
+            fy, fx = f
+            object_feats[i, 0] = fx
+            object_feats[i, 1] = fy
+            object_feats[i, 2] = self.fire_id
+
+            i += 1
+        
+        for v in self.victims:
+            vy, vx = v
+            object_feats[i, 0] = vx
+            object_feats[i, 1] = vy
+            object_feats[i, 2] = self.victim_id
+
+            i += 1
+        
+        # agent features
+        ids = [id for id in range(self.n_agents)]
+
+        for i, id in enumerate(ids):
+            agent = self.get_unit_by_id(id)
+            ax = agent.x
+            ay = agent.y
+
+            agent_feats[i, 0] = ax
+            agent_feats[i, 1] = ay
+            agent_feats[i, 2] = agent.type_id
+
+        
+        state = np.concatenate((
+            agent_feats.flatten(),
+            object_feats.flatten()
+            )
+        )
+
+        return state
+
+    def get_state_size(self):
+        """Returns the size of the global state."""
+        # if self.obs_instead_of_state:
+        #     return self.get_obs_size() * self.n_agents
+
+        nf_al = 4 + self.shield_bits_ally + self.unit_type_bits
+        nf_en = 3 + self.shield_bits_enemy + self.unit_type_bits
+
+        enemy_state = self.n_objects * nf_en
+        ally_state = self.n_agents * nf_al
+
+        size = enemy_state + ally_state
+
+        if self.state_last_action:
+            size += self.n_agents * self.n_actions
+        if self.state_timestep_number:
+            size += 1
+
+        return size
+
+
 
     def transition(self, action):
         moves = [(-1, 0), (1, 0), (0, -1), (0, 1), (0, 0)]  # (dy, dx) - Up, Down, Left, Right, Stay
@@ -288,7 +375,7 @@ class WildFireEnv(gym.Env):
 
         reward = self.reward() 
 
-        agent_obs = [self.get_agent_obs(i) for i in range(self.n_agents)]
+        agent_obs = [self.get_obs_agent(i) for i in range(self.n_agents)]
         #state = np.array(agent_obs).flatten()
         state = self.get_state()
 
@@ -333,91 +420,7 @@ class WildFireEnv(gym.Env):
         return abs(start[0] - target[0]) + abs(start[1] - target[1])
     
     def reward(self):
-
-        return 1
-    
-        if self.method == "baseline":
-            reward = 0
-
-            for agent_id in self.agents:
-                agent = self.agents[agent_id]
-                a_coords = [agent.x, agent.y]
-                is_FF = False
-                is_med = False
-
-                if agent.type_id == 1000:
-                    is_FF = True
-                else:
-                    is_med = True
-                
-            if is_FF and a_coords in self.fire:
-                # reward += 10
-                reward += 50
-            if is_med and a_coords in self.fire:
-                reward += -100 
-            if is_med and a_coords in self.victims:
-                # reward += 50
-                reward += 10
-            # if self.calculate_distance_med_FF() > 2:
-            #     reward += -100
-            # if self.calculate_distance_med_FF() <= 2:
-            #     reward += 10
-            return reward/10
-        
-        if self.method == 'hypRL':
-
-
-            dist = list()
-            # for tr in self.trajectory:
-            #     dist.append(3 - tr[2])
-            fire_list = list()
-            victim_list = list()
-
-            # dist_term = min(dist)
-
-            if len(self.fire) > 0:
-                fire_list = list()
-                for fire in self.fire:
-                    temp = list()
-                    temp1 = list()
-                    temp2 = list()
-                    for index in range(1,len(self.trajectory)):
-
-                        for tr in self.trajectory[:index]:
-                            temp1.append(-1 * (1 - self.calculate_distance(fire, tr[0][0])))
-                        for tr in self.trajectory[index:]:
-                            temp2.append(1 - self.calculate_distance(fire, tr[1][0]))
-                        temp2.append(min(temp1))
-                        temp.append(min(temp2))
-                    fire_list.append(max(temp))
-                fire_term = min(fire_list)
-            else:
-                fire_term = math.inf
-
-            # print('victime len',len(self.victims))
-            # print('fire len',len(self.fire))
-
-            if len(self.victims) > 0:
-
-                for victim in self.victims:
-                    Victim_temp = list()
-                    for tr in self.trajectory:
-                        Victim_temp.append(1 - self.calculate_distance(victim, tr[0][0]))
-                    victim_list.append(max(Victim_temp))
-
-                victim_term = min(victim_list)
-            else:
-                victim_term = math.inf
-            
-            # reward = min(dist_term, fire_term, victim_term)
-            reward = min(fire_term, victim_term)
-
-            # print("reward",reward)
-            # print("dist",dist_term)
-            # print("fire",fire_term)
-            # print("vict",victim_term)
-
-            return reward
+            return 5
         
     def seed(self, seed=None):
         np.random.seed(seed)
@@ -436,7 +439,7 @@ class WildFireEnv(gym.Env):
         self.trunct = False
         self.trajectory = list()
         self.trajectory.append((self.FF, self.med, self.calculate_distance_med_FF()))
-        agent_obs = [self.get_agent_obs(i) for i in range(self.n_agents)]
+        agent_obs = [self.get_obs_agent(i) for i in range(self.n_agents)]
         #state = np.array(agent_obs).flatten()
         state = self.get_state()
         self.init_agents()
@@ -517,26 +520,28 @@ class WildFireEnv(gym.Env):
 if __name__ == "__main__":
 
     env = WildFireEnv(method="hypRL", n_grid=5)
-    env.init_agents()
 
-    env.reset()
-    env.render()
 
-    done = False
-    step = 0
+    print(env.get_obs())
 
-    print(env.observation_space.sample())
-    print(env.observation_space)
-    for i in range(10):        
-        action = env.action_space.sample()
+    # env.reset()
+    # env.render()
+
+    # done = False
+    # step = 0
+
+    # print(env.observation_space.sample())
+    # print(env.observation_space)
+    # for i in range(10):        
+    #     action = env.action_space.sample()
         
-        obs, state, reward, done, trunct, info = env.step(action)
-        env.render()
-        print("STARTING STATE")
-        print(state)
+    #     obs, state, reward, done, trunct, info = env.step(action)
+    #     env.render()
+    #     print("STARTING STATE")
+    #     print(state)
 
-        step += 1 
-        print("reward", reward)
+    #     step += 1 
+    #     print("reward", reward)
 
 
 
