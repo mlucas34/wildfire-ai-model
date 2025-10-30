@@ -119,7 +119,7 @@ class WildFireEnv(gym.Env):
 
         unit = self.get_unit_by_id(agent_id)
 
-        agent_feats = np.zeros((len(self.FF) + len(self.med), 5), dtype = np.int64)
+        agent_feats = np.zeros((self.n_agents-1, 5), dtype = np.int64)
         object_feats = np.zeros((len(self.original_fire) + len(self.original_victims), 5), dtype = np.int64)
         own_feats = np.zeros(3, dtype = np.int64)
 
@@ -161,6 +161,7 @@ class WildFireEnv(gym.Env):
         # agent features
         ally_ids = [id for id in range(self.n_agents) if id != agent_id]
 
+
         for i, ally_id in enumerate(ally_ids):
             ally_unit = self.get_unit_by_id(ally_id)
             ax = ally_unit.x
@@ -185,7 +186,6 @@ class WildFireEnv(gym.Env):
         own_feats[1] = unit.y
         own_feats[2] = unit.type_id
 
-
         agent_obs = np.concatenate((
             own_feats.flatten(), 
             agent_feats.flatten(),
@@ -196,6 +196,14 @@ class WildFireEnv(gym.Env):
         np.round(agent_obs, decimals=0, out=None)
 
         return agent_obs
+    
+    def get_obs_size(self):
+        """Returns the size of the observation."""
+        tot_objects = self.n_objects * 5
+        tot_agnets = (self.n_agents - 1) * 5
+        itself = 3
+
+        return tot_objects + tot_agnets + itself
     
     def get_grid(self):
         grid = np.zeros((self.n_grid, self.n_grid), dtype = np.int8)
@@ -297,18 +305,16 @@ class WildFireEnv(gym.Env):
         # if self.obs_instead_of_state:
         #     return self.get_obs_size() * self.n_agents
 
-        nf_al = 4 + self.shield_bits_ally + self.unit_type_bits
-        nf_en = 3 + self.shield_bits_enemy + self.unit_type_bits
+        object_state = self.n_objects * 3
+        agent_state = self.n_agents * 3
 
-        enemy_state = self.n_objects * nf_en
-        ally_state = self.n_agents * nf_al
+        size = object_state + agent_state
 
-        size = enemy_state + ally_state
-
-        if self.state_last_action:
-            size += self.n_agents * self.n_actions
-        if self.state_timestep_number:
-            size += 1
+        # if self.state_last_action:
+        #     size += self.n_agents * self.n_actions
+        # if self.state_timestep_number:
+        #     size += 1
+        # TODO
 
         return size
 
@@ -523,9 +529,6 @@ class WildFireEnv(gym.Env):
 if __name__ == "__main__":
 
     env = WildFireEnv(method="hypRL", n_grid=5)
-
-    env.reset()
-    env.render()
 
 
     # env.reset()
