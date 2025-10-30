@@ -1,5 +1,3 @@
-
-
 import gymnasium as gym
 from gymnasium import spaces 
 import numpy as np
@@ -14,30 +12,39 @@ class WildFireEnv(gym.Env):
     def __init__(self, n_grid = 3, method = "baseline", mode = 'train'):
         super(WildFireEnv, self).__init__()
 
+        # info
         self.n_grid = n_grid
         self.method = method
+        self.grid_size = (self.n_grid, self.n_grid)
+        self.episode_limit = 100
+        self.observation_space = spaces.MultiDiscrete(np.full(self.n_grid * self.n_grid, 15, dtype=np.int32))
 
-        self.grid_size = (self.n_grid, self.n_grid) 
-        self.FF = [[2, 0], [3, 0]]
-        self.med = [[1, 0], [1, 0]]
-        self.original_FF = self.FF
-        self.original_med = self.med
-        self.number_of_FF = len(self.FF)
-        self.number_of_med = len(self.med)
-        self.FF_id = 1000
-        self.med_id = 2000
-        self.fire_id = 3000
-        self.victim_id = 4000
-        self.agents = {}
-        self.n_agents = 0
-        self.fire = [[0, 1], [1, 2], [2, 1]]
-        self.victims = [[0, 0], [1, 2]]
+
+        # actions
+        self.n_actions = 5
+
+        # objects
+        self.fire = []
+        self.victims = []
         self.n_objects = len(self.fire) + len(self.victims)
+        self.fire_id = 300
+        self.victim_id = 400
         self.original_fire = self.fire
         self.original_victims = self.victims
+
+        # agents
+        self.FF = []
+        self.med = []
+        self.FF_id = 100
+        self.med_id = 200
+        self.agents = {}
+        self.n_agents = 0
+
+        # goals
         self.victim_saved = 0
         self.fire_ex = 0
         self.trajectory = list()
+
         if mode == 'train':
             self.max_step = 1000
         else:
@@ -50,12 +57,11 @@ class WildFireEnv(gym.Env):
 
         self.action_space = spaces.MultiDiscrete([5] * self.n_agents)
 
-        
-
     def init_agents(self):
         ally_agents = []
 
         for ff in self.FF:
+            print("ff)")
             ally_agents.append(Agent(ff[0], ff[1], self.FF_id)) 
         
         for med in self.med:
@@ -69,9 +75,10 @@ class WildFireEnv(gym.Env):
         
         for i in range(len(sorted_ally_agents)):
             self.agents[i] = sorted_ally_agents[i]
+
+        print(sorted_ally_agents)
         
         self.n_agents = len(sorted_ally_agents)
-        self.action_space = spaces.MultiDiscrete([5] * self.n_agents)
 
     def get_unit_by_id(self, agent_id):
         return self.agents[agent_id]
@@ -205,7 +212,7 @@ class WildFireEnv(gym.Env):
         
         for agent in self.agents.values():
             a_coords = (agent.y, agent.x)
-            type = "FF" if agent.type_id == 1000 else "med"
+            type = "FF" if agent.type_id == 100 else "med"
             cells.setdefault(a_coords, set()).add(type)
 
         for coords, content in cells.items():
@@ -342,8 +349,6 @@ class WildFireEnv(gym.Env):
 
                 new_agent = Agent(agent.x + dx, agent.y + dy, agent.type_id)
                 self.agents[agent_id] = new_agent
-            #new_FF = [self.FF[0] + moves[int(act[0])][0], self.FF[1] + moves[int(act[0])][1]]
-            #new_med = [self.med[0] + moves[int(act[1])][0], self.med[1] + moves[int(act[1])][1]]
         else:
             for agent_id, action in enumerate(actions):
                 agent = self.agents[agent_id]
@@ -353,15 +358,8 @@ class WildFireEnv(gym.Env):
                 new_agent = Agent(agent.x + dx, agent.y + dy, agent.type_id)
                 self.agents[agent_id] = new_agent
             
-            #new_FF = [self.FF[0] + moves[int(action[0])][0], self.FF[1] + moves[int(action[0])][1]]
-            #new_med = [self.med[0] + moves[int(action[1])][0], self.med[1] + moves[int(action[1])][1]]
-
 
         # Move agents
-        
-
-        # print("new_FF", new_FF)
-        # print("new_med", new_med)
 
         for agent_id, agent in self.agents.items():
             x = np.clip(agent.x, 0, self.n_grid - 1)
@@ -369,8 +367,6 @@ class WildFireEnv(gym.Env):
             self.agents[agent_id] = Agent(x, y, agent.type_id)
 
 
-        # print("new_FF1", self.FF)
-        # print("new_med1", self.med)
         self.trajectory.append((self.FF, self.med, self.calculate_distance_med_FF()))
 
         reward = self.reward() 
@@ -427,8 +423,8 @@ class WildFireEnv(gym.Env):
         return [seed]
 
     def reset(self, seed=None, options=None):
-        self.FF = self.original_FF
-        self.med = self.original_med
+        self.FF = [[2, 0], [1, 0]]
+        self.med = [[3, 0], [2, 1]]
 
         self.fire = [[0, self.n_grid -1], [3, self.n_grid -1], [4, self.n_grid -1]]  
         self.victims = [[0, 0], [0, self.n_grid -1]]
@@ -440,10 +436,10 @@ class WildFireEnv(gym.Env):
         self.trajectory = list()
         self.trajectory.append((self.FF, self.med, self.calculate_distance_med_FF()))
         agent_obs = [self.get_obs_agent(i) for i in range(self.n_agents)]
-        #state = np.array(agent_obs).flatten()
         state = self.get_state()
         self.init_agents()
-        self.action_space = spaces.MultiDiscrete([5] * self.n_agents) 
+        self.n_actions
+        self.action_space = spaces.MultiDiscrete([self.n_actions] * self.n_agents) 
 
         return agent_obs, state, {}
 
@@ -463,10 +459,8 @@ class WildFireEnv(gym.Env):
         
         for agent in self.agents.values():
             a_coords = (agent.y, agent.x)
-            type = "FF" if agent.type_id == 1000 else "med"
+            type = "FF" if agent.type_id == 100 else "med"
             cells.setdefault(a_coords, set()).add(type)
-
-            #grid[tuple(v)] = 8 if v in self.fire else 5
 
         for coords, content in cells.items():
             if content == {'FF'}:
@@ -517,31 +511,42 @@ class WildFireEnv(gym.Env):
                     "episode_limit": self.episode_limit}
         return env_info
 
+    def get_avail_actions(self):
+        return self.n_actions
+    
+    def get_total_actions(self):
+        return self.n_actions
+    
+    def get_avail_agent_actions(self):
+        return self.n_actions
+
 if __name__ == "__main__":
 
     env = WildFireEnv(method="hypRL", n_grid=5)
 
+    env.reset()
+    env.render()
 
-    print(env.get_obs())
 
     # env.reset()
     # env.render()
 
+
     # done = False
-    # step = 0
+    step = 0
 
-    # print(env.observation_space.sample())
-    # print(env.observation_space)
-    # for i in range(10):        
-    #     action = env.action_space.sample()
-        
-    #     obs, state, reward, done, trunct, info = env.step(action)
-    #     env.render()
-    #     print("STARTING STATE")
-    #     print(state)
+    print(env.observation_space.sample())
+    print(env.observation_space)
+    for i in range(10):        
+        action = env.action_space.sample()
+    
+        obs, state, reward, done, trunct, info = env.step(action)
+        env.render()
+        print("STARTING STATE")
+        print(state)
 
-    #     step += 1 
-    #     print("reward", reward)
+    step += 1 
+    print("reward", reward)
 
 
 
