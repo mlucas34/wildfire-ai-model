@@ -5,9 +5,11 @@ import math
 from operator import attrgetter
 from collections import namedtuple
 import random
+from smac.env.multiagentenv import MultiAgentEnv
 from enum import Enum
 
 Agent = namedtuple("Agent", ["x", "y", "type_id"])
+
 
 class Moves(Enum):
     UP = 0
@@ -16,8 +18,8 @@ class Moves(Enum):
     RIGHT = 3
     STAY = 4
 
-class WildFireEnv():
-    def __init__(self, n_grid = 3, hyper = True, seed = None, episode_limit = 100):
+class WildFireEnv(MultiAgentEnv):
+    def __init__(self, n_grid = 5, hyper = True, seed = None, episode_limit = 20):
         super(WildFireEnv, self).__init__()
 
         # info
@@ -128,7 +130,7 @@ class WildFireEnv():
         # object features
         i = 0
         for f in self.fire:
-            fy, fx = f
+            fx, fy = f
             dist = self._manhattan_distance(f, (y, x))
 
             if (dist <= 1):
@@ -143,8 +145,8 @@ class WildFireEnv():
             i += 1
         
         for v in self.victims:
-            vy, vx = v
-            dist = self._manhattan_distance(v, (y, x))
+            vx, vy = v
+            dist = self._manhattan_distance(v, (x, y))
 
             if (dist <= 1):
                 object_feats[i, 0] = 1 # visible
@@ -218,7 +220,7 @@ class WildFireEnv():
             cells.setdefault(tuple(v), set()).add("v")
         
         for agent in self.agents.values():
-            a_coords = (agent.y, agent.x)
+            a_coords = (agent.x, agent.y)
             type = "FF" if agent.type_id == self.FF_id else "med"
             cells.setdefault(a_coords, set()).add(type)
 
@@ -318,35 +320,39 @@ class WildFireEnv():
         # TODO
 
         return size
-    
+
+
 
     def transition(self, action):
-        moves = [(-1, 0), (1, 0), (0, -1), (0, 1), (0, 0)]  # (dy, dx) - Up, Down, Left, Right, Stay
+        moves = [(0, -1), (0, 1), (-1, 0), (1, 0), (0, 0)]  # (dx, dy) - Up, Down, Left, Right, Stay
         transition_probabilities = {
-            0: (0.9, 0.025, 0.025, 0.025, 0.025),  # up
-            1: (0.025, 0.9, 0.025, 0.025, 0.025),  # down
-            2: (0.025, 0.025, 0.9, 0.025, 0.025),  # left
-            3: (0.025, 0.025, 0.025, 0.9, 0.025),  # right
-            4: (0.025, 0.025, 0.025, 0.025, 0.9)   # stay
+        0: (1.0, 0, 0, 0, 0),  # up
+        1: (0, 1.0, 0, 0, 0),  # down
+        2: (0, 0, 1.0, 0, 0),  # left
+        3: (0, 0, 0, 1.0, 0),  # right
+        4: (0, 0, 0, 0, 1.0)  # stay
         }
+
 
         probablities = transition_probabilities[action]
         
 
         #print("CHOICE", random.choices(moves, weights = probablities, k = 1)[0])
 
-        dy, dx = random.choices(moves, weights = probablities, k = 1)[0]
+        dx, dy = random.choices(moves, weights = probablities, k = 1)[0]
 
-        return dy, dx
+        return dx, dy
 
     def step(self, actions):
 
         terminated = False
 
+        self.steps += 1
+
 
         actions = [int(a) for a in actions]
 
-        moves = [(-1, 0), (1, 0), (0, -1), (0, 1), (0, 0)]  # (dy, dx) - Up, Down, Left, Right, Stay
+        moves = [(0, -1), (0, 1), (-1, 0), (1, 0), (0, 0)]  # (dx, dy) - Up, Down, Left, Right, Stay
         
         # print("FF", self.FF)
         # print("med", self.med)
@@ -355,7 +361,7 @@ class WildFireEnv():
         for agent_id, action in enumerate(actions):
             agent = self.agents[agent_id]
             
-            dy, dx = self.transition(action)
+            dx, dy = self.transition(action)
 
             new_agent = Agent(agent.x + dx, agent.y + dy, agent.type_id)
             self.agents[agent_id] = new_agent
@@ -377,7 +383,9 @@ class WildFireEnv():
 
         for id in enumerate(self.agents):
             agent = self.agents[id[0]]
-            a_coords = [agent.y, agent.x]
+
+            a_coords = [agent.x, agent.y]
+
 
             if (a_coords in fire_copy) and (agent.type_id == self.FF_id):
                 self.fire_ex += 1
@@ -390,8 +398,13 @@ class WildFireEnv():
         self.victims = vistm_copy.copy()
         self.fire = fire_copy.copy()
 
-        terminated = len(self.fire) == 0 and len(self.victims) == 0
-        sub_goals = [len(self.fire) == 0 , len(self.victims) == 0]
+        self.render()
+
+        reward = self.get_reward()
+
+        win = terminated = len(self.fire) == 0 and len(self.victims) == 0
+
+
 
         info = self.get_env_info()
 
@@ -411,14 +424,17 @@ class WildFireEnv():
                 dist_agents.append(self.distance(ag1.x, ag1.y, ag2.x, ag2.y))
 
         info['distance_agents'] = sum(dist_agents)/len(dist_agents)
-                
+
+
+        if win: 
+            info['Win'] = 1
+        else:
+            info['Win'] = 0
 
         if self.steps >= self.episode_limit:
             terminated = True
 
-        self.steps += 1
         
-        reward = self.get_reward()
 
         return reward, terminated, info
     
@@ -445,7 +461,7 @@ class WildFireEnv():
             cells.setdefault(tuple(v), set()).add("v")
         
         for agent in self.agents.values():
-            a_coords = (agent.y, agent.x)
+            a_coords = (agent.x, agent.y)
             type = "FF" if agent.type_id == self.FF_id else "med"
             cells.setdefault(a_coords, set()).add(type)
 
@@ -503,15 +519,110 @@ class WildFireEnv():
 
     def get_avail_actions(self):
         avail_actions = []
-
         for agent_id in range(self.n_agents):
             avail_agent = self.get_avail_agent_actions(agent_id)
             avail_actions.append(avail_agent)
-
         return avail_actions
     
     def get_total_actions(self):
         return self.n_actions
+
+    
+    def init_reward(self):
+
+        self.dist_fire = dict()
+
+        self.dist_med = dict()
+
+
+        for f_index, pos in enumerate(self.fire_org):
+            self.dist_fire[f_index] = -1*math.inf
+
+        for f_index, pos in enumerate(self.victims_org):
+            self.dist_med[f_index] = -1*math.inf
+
+        
+        self.dist_med_ff = math.inf
+
+    def get_reward(self):
+
+        MULTI_MED = 20
+        MULTI_FF = 10
+        MULTI_MED_FIRE = 20
+
+        MULTI_DIST = 20
+
+        # phi_save
+        for agent_id in range(self.n_agents):
+            ag = self.get_unit_by_id(agent_id)
+            if ag.type_id == self.FF_id:
+                for f_index, pos in enumerate(self.fire_org):
+                    if pos not in self.fire:
+                        self.dist_fire[f_index] = math.inf
+                    else:
+                        dist_temp = (1 - self.distance(pos[0],pos[1], ag.x, ag.y))*MULTI_FF
+                        if dist_temp>self.dist_fire[f_index]:
+                            self.dist_fire[f_index] = dist_temp
+            phi_dist_fire = min(self.dist_fire.values())
+
+            if ag.type_id == self.med_id:
+                for f_index, pos in enumerate(self.victims_org):
+                    if pos not in self.victims:
+                        self.dist_med[f_index] = math.inf
+                    else:
+                        dist_temp = (1 - self.distance(pos[0],pos[1], ag.x, ag.y))* MULTI_MED
+                        if dist_temp>self.dist_med[f_index]:
+                            self.dist_med[f_index] = dist_temp
+
+            phi_dist_victim = min(self.dist_med.values())
+
+
+            temp_dist_med = list()
+
+
+            if ag.type_id == self.med_id:
+                for f_index, pos in enumerate(self.fire):
+                    temp_dist_med.append((self.distance(pos[0],pos[1], ag.x, ag.y)) * MULTI_MED_FIRE)
+
+
+
+            if ag.type_id == self.med_id and len(temp_dist_med) == 0:
+                phi_dist_med_fire = math.inf
+            elif ag.type_id == self.med_id and len(temp_dist_med) > 0:
+                phi_dist_med_fire = min(temp_dist_med)
+
+                
+
+            temp_dist_med_ff = list()
+
+            for agent_id_2 in range(self.n_agents):
+                if agent_id_2 == agent_id:
+                    continue
+                ag2 = self.get_unit_by_id(agent_id_2)
+                temp_dist_med_ff.append((4 - self.distance(ag2.x,ag2.y, ag.x, ag.y))*MULTI_DIST )
+            
+            phi_dist_med_ff = min(temp_dist_med_ff)
+
+
+
+        win = len(self.fire) == 0 and len(self.victims) == 0
+
+        if win:
+            phi_win  = 200
+        else:
+            phi_win = -1 * math.inf
+
+
+        rew = max(min(phi_dist_fire, phi_dist_victim, phi_dist_med_fire, phi_dist_med_ff), phi_win)
+
+
+        rew = rew/5
+
+        print(f"dist fire: {phi_dist_fire}, dist victim: {phi_dist_victim}, dist med fire: {phi_dist_med_fire}, dist med FF: {phi_dist_med_ff}, win : {phi_win}, reward: {rew}")
+
+
+
+        return rew
     
     def can_move(self, agent_id, move):
 
@@ -544,86 +655,6 @@ class WildFireEnv():
             avail_actions[3] = 1
 
         return avail_actions
-    
-    def init_reward(self):
-
-        self.dist_fire = dict()
-
-        self.dist_med = dict()
-
-
-        for f_index, pos in enumerate(self.fire_org):
-            self.dist_fire[f_index] = -1*math.inf
-
-        for f_index, pos in enumerate(self.victims_org):
-            self.dist_med[f_index] = -1*math.inf
-
-        
-        self.dist_med_ff = math.inf
-
-    def get_reward(self):
-
-        MULTI_MED = 20
-        MULTI_FF = 10
-        MULTI_MED_FIRE = 20
-
-        MULTI_DIST = 20
-
-        # phi_save
-        for agent_id in range(self.n_agents):
-            ag = self.get_unit_by_id(agent_id)
-            if ag.type_id == self.FF_id:
-                for f_index, pos in enumerate(self.fire_org):
-                    if pos not in self.FF:
-                        self.dist_fire[f_index] = math.inf
-                    else:
-                        dist_temp = (1 - self.distance(pos[0],pos[1], ag.x, ag.y))*MULTI_FF
-                        if dist_temp>self.dist_fire[f_index]:
-                            self.dist_fire[f_index] = dist_temp
-            phi_dist_fire = min(self.dist_fire.values())
-
-            if ag.type_id == self.med_id:
-                for f_index, pos in enumerate(self.victims_org):
-                    if pos not in self.victims:
-                        self.dist_med[f_index] = math.inf
-                    else:
-                        dist_temp = (1 - self.distance(pos[0],pos[1], ag.x, ag.y))* MULTI_MED
-                        if dist_temp>self.dist_med[f_index]:
-                            self.dist_med[f_index] = dist_temp
-
-            phi_dist_victim = min(self.dist_med.values())
-
-
-            temp_dist_med = list()
-
-
-            if ag.type_id == self.med_id:
-                for f_index, pos in enumerate(self.FF):
-
-                    temp_dist_med.append((self.distance(pos[0],pos[1], ag.x, ag.y)) * MULTI_MED_FIRE)
-
-            if not temp_dist_med:
-                phi_dist_med_fire = math.inf
-            else:
-                phi_dist_med_fire = min(temp_dist_med)
-
-
-            temp_dist_med = list()
-
-            for agent_id_2 in range(self.n_agents):
-                if agent_id_2 == agent_id:
-                    continue
-                ag2 = self.get_unit_by_id(agent_id_2)
-                temp_dist_med.append((2 - self.distance(ag2.x,ag2.y, ag.x, ag.y))*MULTI_DIST )
-            
-            temp_dist_med_ff = min(temp_dist_med)
-
-        rew = min(phi_dist_fire, phi_dist_victim, phi_dist_med_fire, temp_dist_med_ff)
-
-
-        rew = rew/5
-
-        return rew
 
 
 
@@ -635,5 +666,6 @@ if __name__ == "__main__":
 
     env = WildFireEnv(hyper=True, n_grid=5)
 
-    env.render()
+
     print(env.get_avail_actions())
+
