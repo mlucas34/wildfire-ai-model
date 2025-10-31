@@ -5,7 +5,6 @@ import math
 from operator import attrgetter
 from collections import namedtuple
 import random
-from smac.env.multiagentenv import MultiAgentEnv
 from enum import Enum
 
 Agent = namedtuple("Agent", ["x", "y", "type_id"])
@@ -18,7 +17,7 @@ class Moves(Enum):
     RIGHT = 3
     STAY = 4
 
-class WildFireEnv(MultiAgentEnv):
+class WildFireEnv():
     def __init__(self, n_grid = 5, hyper = True, seed = None, episode_limit = 20):
         super(WildFireEnv, self).__init__()
 
@@ -34,7 +33,7 @@ class WildFireEnv(MultiAgentEnv):
         self.n_actions = 5
 
         # objects
-        self.fire = [[0, 1], [1, 2], [2, 1]]
+        self.fire = [[4, 1], [1, 2], [2, 1]]
         self.victims = [[0, 0], [1, 2]]
 
         self.fire_org = [[0, 1], [1, 2], [2, 1]]
@@ -131,7 +130,7 @@ class WildFireEnv(MultiAgentEnv):
         i = 0
         for f in self.fire:
             fx, fy = f
-            dist = self._manhattan_distance(f, (y, x))
+            dist = self._manhattan_distance(f, (x, y))
 
             if (dist <= 1):
                 object_feats[i, 0] = 1 # visible
@@ -183,8 +182,8 @@ class WildFireEnv(MultiAgentEnv):
 
 
         #own feats
-        own_feats[0] = unit.x
-        own_feats[1] = unit.y
+        own_feats[0] = unit.y
+        own_feats[1] = unit.x
         own_feats[2] = unit.type_id
 
         agent_obs = np.concatenate((
@@ -288,8 +287,8 @@ class WildFireEnv(MultiAgentEnv):
             ax = agent.x
             ay = agent.y
 
-            agent_feats[i, 0] = ax
-            agent_feats[i, 1] = ay
+            agent_feats[i, 0] = ay
+            agent_feats[i, 1] = ax
             agent_feats[i, 2] = agent.type_id
 
         
@@ -435,10 +434,8 @@ class WildFireEnv(MultiAgentEnv):
             terminated = True
 
         
-
         return reward, terminated, info
     
-
         
     def seed(self):
         return self._seed
@@ -522,6 +519,7 @@ class WildFireEnv(MultiAgentEnv):
         for agent_id in range(self.n_agents):
             avail_agent = self.get_avail_agent_actions(agent_id)
             avail_actions.append(avail_agent)
+
         return avail_actions
     
     def get_total_actions(self):
@@ -615,12 +613,9 @@ class WildFireEnv(MultiAgentEnv):
 
         rew = max(min(phi_dist_fire, phi_dist_victim, phi_dist_med_fire, phi_dist_med_ff), phi_win)
 
-
         rew = rew/5
 
         print(f"dist fire: {phi_dist_fire}, dist victim: {phi_dist_victim}, dist med fire: {phi_dist_med_fire}, dist med FF: {phi_dist_med_ff}, win : {phi_win}, reward: {rew}")
-
-
 
         return rew
     
@@ -629,13 +624,13 @@ class WildFireEnv(MultiAgentEnv):
         agent = self.agents[agent_id]
         
         if move == Moves.UP:
-            y, x = int(agent.y - 1), int(agent.x)
+            x, y = int(agent.x - 1), int(agent.y)
         elif move == Moves.DOWN:
-            y, x = int(agent.y + 1), int(agent.x)
+            x, y = int(agent.x + 1), int(agent.y)
         elif move == Moves.LEFT:
-            y, x = int(agent.y), int(agent.x - 1)
+            x, y = int(agent.x), int(agent.y - 1)
         else:
-            y, x = int(agent.y), int(agent.x + 1)
+            x, y = int(agent.x), int(agent.y + 1)
 
         return 0 <= x < self.n_grid and 0 <= y < self.n_grid
 
@@ -655,17 +650,14 @@ class WildFireEnv(MultiAgentEnv):
             avail_actions[3] = 1
 
         return avail_actions
-
-
-
-
                 
-
 
 if __name__ == "__main__":
 
     env = WildFireEnv(hyper=True, n_grid=5)
 
-
+    print(env.render())
     print(env.get_avail_actions())
+    print(env.get_obs())
+    print(env.get_state())
 
