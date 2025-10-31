@@ -5,11 +5,18 @@ import math
 from operator import attrgetter
 from collections import namedtuple
 import random
-from smac.env.multiagentenv import MultiAgentEnv
+from enum import Enum
 
 Agent = namedtuple("Agent", ["x", "y", "type_id"])
 
-class WildFireEnv(MultiAgentEnv):
+class Moves(Enum):
+    UP = 0
+    DOWN = 1
+    LEFT = 2
+    RIGHT = 3
+    STAY = 4
+
+class WildFireEnv():
     def __init__(self, n_grid = 3, hyper = True, seed = None, episode_limit = 100):
         super(WildFireEnv, self).__init__()
 
@@ -311,8 +318,7 @@ class WildFireEnv(MultiAgentEnv):
         # TODO
 
         return size
-
-
+    
 
     def transition(self, action):
         moves = [(-1, 0), (1, 0), (0, -1), (0, 1), (0, 0)]  # (dy, dx) - Up, Down, Left, Right, Stay
@@ -497,17 +503,45 @@ class WildFireEnv(MultiAgentEnv):
 
     def get_avail_actions(self):
         avail_actions = []
+
         for agent_id in range(self.n_agents):
             avail_agent = self.get_avail_agent_actions(agent_id)
             avail_actions.append(avail_agent)
+
         return avail_actions
     
     def get_total_actions(self):
         return self.n_actions
     
+    def can_move(self, agent_id, move):
+
+        agent = self.agents[agent_id]
+        
+        if move == Moves.UP:
+            y, x = int(agent.y - 1), int(agent.x)
+        elif move == Moves.DOWN:
+            y, x = int(agent.y + 1), int(agent.x)
+        elif move == Moves.LEFT:
+            y, x = int(agent.y), int(agent.x - 1)
+        else:
+            y, x = int(agent.y), int(agent.x + 1)
+
+        return 0 <= x < self.n_grid and 0 <= y < self.n_grid
+
     def get_avail_agent_actions(self, agent_id):
         
-        avail_actions = [1] * self.n_actions
+        avail_actions = [0] * self.n_actions
+
+        avail_actions[4] = 1 # can always stay
+
+        if (self.can_move(agent_id, Moves.UP)):
+            avail_actions[0] = 1
+        if (self.can_move(agent_id, Moves.DOWN)):
+            avail_actions[1] = 1
+        if (self.can_move(agent_id, Moves.LEFT)):
+            avail_actions[2] = 1
+        if (self.can_move(agent_id, Moves.RIGHT)):
+            avail_actions[3] = 1
 
         return avail_actions
     
@@ -601,6 +635,5 @@ if __name__ == "__main__":
 
     env = WildFireEnv(hyper=True, n_grid=5)
 
-
+    env.render()
     print(env.get_avail_actions())
-
