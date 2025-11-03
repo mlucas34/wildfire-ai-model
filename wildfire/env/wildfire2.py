@@ -19,7 +19,7 @@ class Moves(Enum):
     STAY = 4
 
 class WildFireEnv(MultiAgentEnv):
-    def __init__(self, n_grid = 5, hyper = True, seed = None, episode_limit = 20):
+    def __init__(self, n_grid = 3, hyper = True, seed = None, episode_limit = 50):
         super(WildFireEnv, self).__init__()
 
         # info
@@ -27,6 +27,7 @@ class WildFireEnv(MultiAgentEnv):
         self.hyper = hyper
         self.grid_size = (self.n_grid, self.n_grid)
         self.episode_limit = episode_limit
+        self.safe_dist = 5
         # self.observation_space = spaces.MultiDiscrete(np.full(self.n_grid * self.n_grid, 15, dtype=np.int32))
 
 
@@ -34,26 +35,31 @@ class WildFireEnv(MultiAgentEnv):
         self.n_actions = 5
 
         # objects
-        self.fire = [[0, 1], [1, 2], [2, 1]]
-        self.victims = [[0, 0], [1, 2]]
+        fire = [[0, 1], [1, 2], [2, 1]]
+        victim = [[0, 0], [2, 2]]
 
-        self.fire_org = [[0, 1], [1, 2], [2, 1]]
-        self.victims_org = [[0, 0], [1, 2]]
+        self.fire = fire
+        self.victims = victim
+
+        self.fire_org = fire
+        self.victims_org = victim
 
 
         self.n_objects = len(self.fire) + len(self.victims)
-        self.fire_id = 300
-        self.victim_id = 400
+        self.fire_id = 100
+        self.victim_id = 105
         self.original_fire = self.fire
         self.original_victims = self.victims
 
         # agents
         self.FF = [[2, 0]]
-        self.med = [[1, 0]]
-        self.FF_id = 100
-        self.med_id = 200
+        self.med = [[2, 0]]
+        self.FF_id = 500
+        self.med_id = 600
         self.agents = {}
         self.n_agents = len(self.FF) + len(self.med)
+
+        self.last_action = np.zeros((self.n_agents, self.n_actions))
 
         # goals
         self.victim_saved = 0
@@ -62,7 +68,7 @@ class WildFireEnv(MultiAgentEnv):
 
         self.init_agents()
 
-        self.trunct = False
+
 
         self.steps = 0
 
@@ -107,6 +113,7 @@ class WildFireEnv(MultiAgentEnv):
             , unit_type)
         - objects features (visible, distance, relative_x, relative_y,
             unit_type)
+        - Last action of the agents 
 
         The size of the observation vector may vary, depending on the
         environment configuration and type of units present in the map.
@@ -123,9 +130,13 @@ class WildFireEnv(MultiAgentEnv):
         agent_feats = np.zeros((self.n_agents-1, 5), dtype = np.float32)
         object_feats = np.zeros((len(self.original_fire) + len(self.original_victims), 5), dtype = np.float32)
         own_feats = np.zeros(3, dtype = np.float32)
+        move_feats = np.zeros(self.n_actions, dtype=np.float32)
 
         x = unit.x
         y = unit.y
+
+
+        sight_range = 5
 
         # object features
         i = 0
@@ -133,7 +144,7 @@ class WildFireEnv(MultiAgentEnv):
             fx, fy = f
             dist = self._manhattan_distance(f, (x, y))
 
-            if (dist <= 1):
+            if (dist <= sight_range):
                 object_feats[i, 0] = 1 # visible
                 relative_x = (fx - x)
                 relative_y = (fy - y)
@@ -148,7 +159,7 @@ class WildFireEnv(MultiAgentEnv):
             vx, vy = v
             dist = self._manhattan_distance(v, (x, y))
 
-            if (dist <= 1):
+            if (dist <= sight_range):
                 object_feats[i, 0] = 1 # visible
                 relative_x = (vx - x)
                 relative_y = (vy - y)
@@ -169,7 +180,7 @@ class WildFireEnv(MultiAgentEnv):
             ay = ally_unit.y
             dist = self._manhattan_distance((ax, ay), (x, y))
 
-            if (dist <= 1):
+            if (dist <= sight_range):
                 agent_feats[i, 0] = 1 # visible
                 relative_x = (ax - x)
                 relative_y = (ay - y)
@@ -181,16 +192,25 @@ class WildFireEnv(MultiAgentEnv):
                 # something
                 agent_feats[i, 4] = ally_unit.type_id
 
+        # movemnet features
+        avail_actions = self.get_avail_agent_actions(agent_id)
+        for m in range(self.n_actions):
+                move_feats[m] = avail_actions[m] 
+
 
         #own feats
         own_feats[0] = unit.x
         own_feats[1] = unit.y
         own_feats[2] = unit.type_id
 
+        
+
         agent_obs = np.concatenate((
             own_feats.flatten(), 
             agent_feats.flatten(),
-            object_feats.flatten()
+            object_feats.flatten(),
+            move_feats.flatten(),
+            self.last_action[agent_id].flatten()
             )
         )
 
@@ -203,8 +223,10 @@ class WildFireEnv(MultiAgentEnv):
         tot_objects = self.n_objects * 5
         tot_agnets = (self.n_agents - 1) * 5
         itself = 3
+        movement = self.n_actions
+        last_action = self.n_actions
 
-        return tot_objects + tot_agnets + itself
+        return tot_objects + tot_agnets + itself + movement + last_action
     
     def get_grid(self):
         grid = np.zeros((self.n_grid, self.n_grid), dtype = np.int8)
@@ -259,8 +281,8 @@ class WildFireEnv(MultiAgentEnv):
         return grid
     
     def get_state(self):
-        agent_feats = np.zeros((len(self.FF) + len(self.med), 3), dtype = np.float32)
-        object_feats = np.zeros((len(self.original_fire) + len(self.original_victims), 3), dtype = np.float32)
+        agent_feats = np.zeros((self.n_agents, 3), dtype = np.float32)
+        object_feats = np.zeros((self.n_objects, 3), dtype = np.float32)
         
         i = 0
 
@@ -291,11 +313,13 @@ class WildFireEnv(MultiAgentEnv):
             agent_feats[i, 0] = ax
             agent_feats[i, 1] = ay
             agent_feats[i, 2] = agent.type_id
-
         
+        time_step = np.array([self.steps/ self.episode_limit])
         state = np.concatenate((
             agent_feats.flatten(),
-            object_feats.flatten()
+            object_feats.flatten(),
+            self.last_action.flatten(),
+            time_step.flatten()
             )
         )
 
@@ -311,16 +335,14 @@ class WildFireEnv(MultiAgentEnv):
         object_state = self.n_objects * 3
         agent_state = self.n_agents * 3
 
-        size = object_state + agent_state
+        #LAST ACTION
+        last_action = self.n_agents * self.n_actions
 
-        # if self.state_last_action:
-        #     size += self.n_agents * self.n_actions
-        # if self.state_timestep_number:
-        #     size += 1
-        # TODO
+        time_step =1
+
+        size = object_state + agent_state + last_action + time_step
 
         return size
-
 
 
     def transition(self, action):
@@ -352,6 +374,8 @@ class WildFireEnv(MultiAgentEnv):
 
         actions = [int(a) for a in actions]
 
+        self.last_action = np.eye(self.n_actions)[np.array(actions)]
+
         
         for agent_id, action in enumerate(actions):
             agent = self.agents[agent_id]
@@ -369,12 +393,10 @@ class WildFireEnv(MultiAgentEnv):
             y = np.clip(agent.y, 0, self.n_grid - 1)
             self.agents[agent_id] = Agent(x, y, agent.type_id)
 
-        agent_obs = [self.get_obs_agent(i) for i in range(self.n_agents)]
-        #state = np.array(agent_obs).flatten()
-        state = self.get_state()
-
-        vistm_copy = self.victims.copy()
+        victim_copy = self.victims.copy()
         fire_copy = self.fire.copy()
+
+        reward = 0
 
         for id in enumerate(self.agents):
             agent = self.agents[id[0]]
@@ -385,23 +407,48 @@ class WildFireEnv(MultiAgentEnv):
             if (a_coords in fire_copy) and (agent.type_id == self.FF_id):
                 self.fire_ex += 1
                 fire_copy.remove(a_coords)# Extinguish fire
+                reward += 5
             
-            if a_coords in vistm_copy and (agent.type_id == self.med_id):
+            if a_coords in victim_copy and (agent.type_id == self.med_id):
                 self.victim_saved += 1
-                vistm_copy.remove(a_coords) #save victim
+                victim_copy.remove(a_coords) #save victim
+                reward+= 10
 
-        self.victims = vistm_copy.copy()
+        self.victims = victim_copy.copy()
         self.fire = fire_copy.copy()
 
-        self.render()
+        #Ad Hoc reward
+        for id in enumerate(self.agents):
+            agent = self.agents[id[0]]
 
-        reward = self.get_reward()
+            a_coords = [agent.x, agent.y]
 
-        win = terminated = len(self.fire) == 0 and len(self.victims) == 0
-
-
+            if a_coords in self.fire and (agent.type_id == self.med_id):
+                reward -= 5
+            for id_2 in enumerate(self.agents):
+                agent2 = self.agents[id_2[0]]
+                if id == id_2:
+                    continue
+                else:
+                    if self.distance(agent2.x, agent2.y, agent.x, agent.y)>self.safe_dist:
+                        pass
+        
+        # self.render()
 
         info = self.get_env_info()
+        
+
+        info['Win'] = terminated = len(self.fire) == 0 and len(self.victims) == 0
+
+        if info['Win'] :
+            reward +=100
+
+        
+        # reward = self.get_reward()
+
+
+
+        
 
         info['fires_extinguished'] = self.fire_ex
         info['victims_saved'] = self.victim_saved
@@ -421,15 +468,15 @@ class WildFireEnv(MultiAgentEnv):
         info['distance_agents'] = sum(dist_agents)/len(dist_agents)
 
 
-        if win: 
-            info['Win'] = 1
-        else:
-            info['Win'] = 0
-
         if self.steps >= self.episode_limit:
+            reward = -10
             terminated = True
 
-        
+        reward = reward/10
+
+        print(reward)
+
+        self.render()
 
         return reward, terminated, info
     
@@ -495,7 +542,7 @@ class WildFireEnv(MultiAgentEnv):
         temp_victim = self.victims.copy()
 
         formatted_grid = "\n".join(["  ".join(f"{cell:3}" for cell in row) for row in grid])
-        print('###################\n\n\n###################')
+        print('###################\n###################')
         print(formatted_grid)
 
     def _manhattan_distance(self, p1, p2):
@@ -539,13 +586,22 @@ class WildFireEnv(MultiAgentEnv):
         
         self.dist_med_ff = math.inf
 
+        self.prev_victim = 0
+        self.prev_fire = 0
+
+
     def get_reward(self):
+
+        MULTI_WIN = 400
 
         MULTI_MED = 20
         MULTI_FF = 10
-        MULTI_MED_FIRE = 20
+        MULTI_MED_FIRE = 50
 
-        MULTI_DIST = 20
+        MULTI_DIST = 100
+
+        MULTI_SAVE = 100
+        MULTI_EX = 80
 
         # phi_save
         for agent_id in range(self.n_agents):
@@ -594,7 +650,7 @@ class WildFireEnv(MultiAgentEnv):
                 if agent_id_2 == agent_id:
                     continue
                 ag2 = self.get_unit_by_id(agent_id_2)
-                temp_dist_med_ff.append((4 - self.distance(ag2.x,ag2.y, ag.x, ag.y))*MULTI_DIST )
+                temp_dist_med_ff.append((self.safe_dist - self.distance(ag2.x,ag2.y, ag.x, ag.y))*MULTI_DIST )
             
             phi_dist_med_ff = min(temp_dist_med_ff)
 
@@ -603,17 +659,42 @@ class WildFireEnv(MultiAgentEnv):
         win = len(self.fire) == 0 and len(self.victims) == 0
 
         if win:
-            phi_win  = 200
+            phi_win  = MULTI_WIN
         else:
             phi_win = -1 * math.inf
 
+        
+        temp_phi_save_vic = self.victim_saved - self.prev_victim
 
-        rew = max(min(phi_dist_fire, phi_dist_victim, phi_dist_med_fire, phi_dist_med_ff), phi_win)
+        if temp_phi_save_vic == 0:
+            phi_save_vic = 0
+        else:
+            phi_save_vic = temp_phi_save_vic * MULTI_SAVE
+
+        temp_phi_ex_fire = self.fire_ex - self.prev_fire
+
+        if temp_phi_ex_fire == 0:
+            phi_ex_fire = 0
+        else:
+            phi_ex_fire = temp_phi_ex_fire * MULTI_EX
+        
 
 
-        rew = rew/5
 
-        print(f"dist fire: {phi_dist_fire}, dist victim: {phi_dist_victim}, dist med fire: {phi_dist_med_fire}, dist med FF: {phi_dist_med_ff}, win : {phi_win}, reward: {rew}")
+        
+
+
+        rew = max(min(max(phi_dist_fire, phi_ex_fire), max(phi_dist_victim, phi_save_vic), phi_dist_med_fire, phi_dist_med_ff), phi_win)
+
+
+        rew = rew/20
+
+        print(f"dist fire: {phi_dist_fire}, EX fire: {phi_ex_fire}, dist victim: {phi_dist_victim}, save victim: {phi_save_vic}, dist med fire: {phi_dist_med_fire}, dist med FF: {phi_dist_med_ff}, win : {phi_win}, reward: {rew}")
+
+
+        # update
+
+        self.prev_victim = self.victim_saved
 
 
 
@@ -650,10 +731,6 @@ class WildFireEnv(MultiAgentEnv):
             avail_actions[3] = 1
 
         return avail_actions
-
-
-
-                
 
 
 if __name__ == "__main__":
