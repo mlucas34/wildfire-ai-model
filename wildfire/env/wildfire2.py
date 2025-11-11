@@ -5,7 +5,11 @@ import math
 from operator import attrgetter
 from collections import namedtuple
 import random
+<<<<<<< HEAD
 #from smac.env.multiagentenv import MultiAgentEnv
+=======
+from smac.env.multiagentenv import MultiAgentEnv
+>>>>>>> d1f5e922b4b43221a388944c90f234ae8836eab7
 from enum import Enum
 
 Agent = namedtuple("Agent", ["x", "y", "type_id", 'agent_id'])
@@ -18,7 +22,11 @@ class Moves(Enum):
     LEFT = 2
     RIGHT = 3
 
+<<<<<<< HEAD
 class WildFireEnv():
+=======
+class WildFireEnv(MultiAgentEnv):
+>>>>>>> d1f5e922b4b43221a388944c90f234ae8836eab7
     def __init__(self, n_grid = 3, hyper = False, seed = None, episode_limit = 50):
         super(WildFireEnv, self).__init__()
 
@@ -197,11 +205,19 @@ class WildFireEnv():
 
             if (dist <= self.sight_range):
                 object_feats[i, 0] = 1 # visible
+<<<<<<< HEAD
                 relative_x = (x - ax)
                 relative_y = (ay - y)
 
                 object_feats[i, 1] = relative_y/self.max_dist_x
                 object_feats[i, 2] = relative_x/self.max_dist_y
+=======
+                relative_x = (ax - x)
+                relative_y = (ay - y)
+
+                object_feats[i, 1] = relative_x/self.max_dist_x
+                object_feats[i, 2] = relative_y/self.max_dist_y
+>>>>>>> d1f5e922b4b43221a388944c90f234ae8836eab7
                 object_feats[i, 3] = dist/self.sight_range
                 object_feats[i, 4:4+self.max_bits] = self.padded(obj_unit.obj_id)
 
@@ -221,8 +237,13 @@ class WildFireEnv():
                 relative_x = (x - ax)
                 relative_y = (ay - y)
 
+<<<<<<< HEAD
                 agent_feats[i, 1] = relative_y/self.max_dist_x
                 agent_feats[i, 2] = relative_x/self.max_dist_y
+=======
+                agent_feats[i, 1] = relative_x/self.max_dist_x
+                agent_feats[i, 2] = relative_y/self.max_dist_y
+>>>>>>> d1f5e922b4b43221a388944c90f234ae8836eab7
                 agent_feats[i, 3] = dist/self.sight_range
 
                 # something
@@ -519,10 +540,16 @@ class WildFireEnv():
 
         return reward, terminated, info
     
+
         
     def seed(self):
         return self._seed
 
+<<<<<<< HEAD
+=======
+
+
+>>>>>>> d1f5e922b4b43221a388944c90f234ae8836eab7
 
     def render(self):
         grid = np.full((self.n_grid, self.n_grid), ' . ', dtype=object)  
@@ -765,3 +792,7 @@ class WildFireEnv():
             avail_actions[3] = 1
 
         return avail_actions
+<<<<<<< HEAD
+=======
+
+>>>>>>> d1f5e922b4b43221a388944c90f234ae8836eab7
