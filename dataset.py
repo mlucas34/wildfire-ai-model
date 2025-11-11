@@ -12,22 +12,26 @@ class WildFireDataset(Dataset):
         
     def collect_data(self):
         for _ in range(self.num_episodes):
-            obs, state, _ = self.env.reset()
-            cur_obs = self.env.get_agent_obs(self.agent_idx)
+            self.env.reset()
+            cur_obs = self.env.get_obs_agent(self.agent_idx)
+
+            state = self.env.get_state()
 
             state = np.array(state.flatten(), dtype=np.long)
             self.samples.append((np.array(cur_obs, dtype=np.long), state))
 
             for i in range(self.steps):        
-                action = self.env.action_space.sample()
+                action = np.random.randint(0, 3, size=2)
                 
-                obs, state, reward, done, trunct, info = self.env.step(action)
-                cur_obs = self.env.get_agent_obs(self.agent_idx)
+                reward, done, info = self.env.step(action)
+                cur_obs = self.env.get_obs_agent(self.agent_idx)
 
                 if done:
                     break
 
+                state = self.env.get_state()
                 state = np.array(state.flatten(), dtype=np.long)
+
                 self.samples.append((np.array(cur_obs, dtype=np.long), state))
 
                 #step += 1 

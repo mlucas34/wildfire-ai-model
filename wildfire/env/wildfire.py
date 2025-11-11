@@ -24,8 +24,8 @@ class WildFireEnv(gym.Env):
         self.n_actions = 5
 
         # objects
-        self.fire = []
-        self.victims = []
+        self.fire = [[0, self.n_grid -1], [3, self.n_grid -1], [4, self.n_grid -1]]  
+        self.victims = [[0, 0], [0, self.n_grid -1]]
         self.n_objects = len(self.fire) + len(self.victims)
         self.fire_id = 300
         self.victim_id = 400
@@ -58,6 +58,8 @@ class WildFireEnv(gym.Env):
         self.action_space = spaces.MultiDiscrete([5] * self.n_agents)
 
     def init_agents(self):
+        self.FF = [[2, 0], [1, 0]]
+        self.med = [[3, 0], [2, 1]]
         ally_agents = []
 
         for ff in self.FF:
@@ -119,9 +121,9 @@ class WildFireEnv(gym.Env):
 
         unit = self.get_unit_by_id(agent_id)
 
-        agent_feats = np.zeros((self.n_agents-1, 5), dtype = np.int64)
-        object_feats = np.zeros((len(self.original_fire) + len(self.original_victims), 5), dtype = np.int64)
-        own_feats = np.zeros(3, dtype = np.int64)
+        agent_feats = np.zeros((self.n_agents-1, 5), dtype = np.float32)
+        object_feats = np.zeros((len(self.original_fire) + len(self.original_victims), 5), dtype = np.float32)
+        own_feats = np.zeros(3, dtype = np.float32)
 
         x = unit.x
         y = unit.y

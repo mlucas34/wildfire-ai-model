@@ -2,15 +2,15 @@ import torch
 from torch import nn, optim
 import numpy as np
 from model import Encoder, Decoder, WildfireSeq2Seq
-from WildFire_partially_observable import WildFireEnv
+from wildfire.env.wildfire2 import WildFireEnv
 import os
 from dataset import WildFireDataset
 from torch.utils.data import DataLoader
 import json
 
 n_grid = 5
-input_dim = 48
-output_dim = 16
+input_dim = 34
+output_dim = 5
 encoder_embedding_dim = 256
 decoder_embedding_dim = 256
 hidden_dim = 512
@@ -71,7 +71,6 @@ def train(model, data_loader, optimizer, loss_function, clip, teacher_forcing_ra
 
 
 if __name__ == '__main__':
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(device)
 
     enc = Encoder(input_dim, encoder_embedding_dim,
@@ -96,10 +95,10 @@ if __name__ == '__main__':
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         start_epoch = checkpoint['epoch'] + 1
 
-    env = WildFireEnv(method="hypRL", n_grid=n_grid)
+    env = WildFireEnv(n_grid=n_grid, hyper = True)
     env.init_agents()
     env.reset()
-    sample_obs = env.get_agent_obs(0)
+    sample_obs = env.get_obs_agent(0)
 
     dataset = WildFireDataset(env, num_episodes = 300, steps = 20, agent_idx = 0)
     dataset.collect_data()
